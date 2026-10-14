@@ -6,6 +6,7 @@ const { toUnicode } = require('gurmukhi-utils')
 const {
   Resolver, canon, splitLines, extractAng, extractCounters, THRESHOLDS,
 } = require('../lib/resolve')
+const fixtures = require('./fixtures.json')
 
 const DB_PATH = process.env.SHABADOS_DB
   || 'node_modules/@shabados/database/build/database.sqlite'
@@ -38,9 +39,43 @@ check('short headings fold into neighbours', () => {
   assert.ok(l.every(x => canon(x).length >= 8), 'no stub lines may survive')
 })
 
+console.log('\nreal SGPC days (agreed with gurbaninow at high in validation/report.md)')
 const R = new Resolver(DB_PATH)
+const resolveCase = c => R.resolve(c.heading, c.bani, 1, { ang: c.ang })
+
+for (const c of fixtures.cases) {
+  check(`${c.date} SGGS: ${c.why}`, () => {
+    const r = resolveCase(c)
+    assert.ok(r.ok, `refused: ${JSON.stringify(r)}`)
+    assert.strictEqual(r.confidence, 'high', JSON.stringify(r))
+    assert.deepStrictEqual(r.shabad_ids, c.expect, JSON.stringify(r))
+    assert.strictEqual(r.coverage, 1, `incomplete coverage: ${JSON.stringify(r)}`)
+    assert.ok(r.line_ids.length > 0, 'line_ids must be populated')
+  })
+}
 
 console.log('\ninvariants')
+check('a nonzero ang_delta never vetoes a strong text match', () => {
+  const r = resolveCase(fixtures.cases.find(x => x.date === '2026-01-29'))
+  assert.notStrictEqual(r.ang_delta, 0, 'this fixture is chosen because ang disagrees')
+  assert.ok(r.ok)
+})
+check('a reading cited before its last ang is not vetoed', () => {
+  const r = resolveCase(fixtures.cases.find(x => x.date === '2026-06-19'))
+  assert.ok(r.ang_scraped < r.ang_corpus_end, JSON.stringify(r))
+  assert.ok(r.ok)
+})
+check('multi-shabad readings return every shabad, in order', () => {
+  const multi = fixtures.cases.filter(x => x.expect.length > 1)
+  assert.ok(multi.length >= 2, 'need at least two multi-shabad fixtures')
+  for (const c of multi) assert.deepStrictEqual(resolveCase(c).shabad_ids, c.expect)
+})
+check('withholding the cited ang changes which tied line wins', () => {
+  const c = fixtures.cases.find(x => x.date === '2026-07-05')
+  const withAng = resolveCase(c)
+  const without = R.resolve(c.heading, c.bani, 1, { ang: null })
+  assert.notDeepStrictEqual(without.line_ids, withAng.line_ids, 'this fixture is chosen because an exact tie occurs')
+})
 check('garbage refuses rather than guessing', () => {
   const r = R.resolve('', 'ਕ ਖ ਗ ਘ ਙ ਚ ਛ ਜ ਝ ਞ ਟ ਠ ਡ ਢ ਣ ਤ ਥ ਦ ਧ ਨ ਪ ਫ ਬ ਭ ਮ', 1)
   assert.ok(!r.ok, `should not resolve: ${JSON.stringify(r)}`)

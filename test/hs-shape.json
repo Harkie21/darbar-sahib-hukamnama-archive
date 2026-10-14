@@ -1,0 +1,39 @@
+{
+  "date": "string",
+  "source": "string",
+  "shabad_ids": [
+    "string"
+  ],
+  "sggs": {
+    "shabad_ids": [
+      "string"
+    ],
+    "line_ids": [
+      "string"
+    ],
+    "confidence": "string",
+    "score": "number",
+    "margin": "number",
+    "ang": "number",
+    "ang_delta": "number",
+    "counters": [
+      "number"
+    ]
+  },
+  "dsg": {
+    "shabad_ids": [],
+    "line_ids": [],
+    "confidence": "string",
+    "score": "number",
+    "margin": "number",
+    "ang": "number",
+    "ang_delta": "number",
+    "counters": [
+      "number"
+    ]
+  },
+  "corpus": {
+    "name": "string",
+    "version": "string"
+  }
+}

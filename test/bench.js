@@ -1,18 +1,17 @@
 'use strict'
 
 /**
- * Scale benchmark. Reconstructs Nanded-style input from known corpus shabads
- * (Unicode, vishraams flattened to double spaces, ang appended in Gurmukhi
- * numerals) and checks that the resolver finds its way home.
+ * Scale benchmark. Reconstructs SGPC-style input from known corpus shabads
+ * (Unicode, vishraams flattened to double spaces, ang passed separately) and
+ * checks that the resolver finds its way home.
  *
  * WHAT THIS PROVES: the normalisation, scoring and thresholds are sound, and
  * the resolver does not confidently return the wrong shabad.
  *
- * WHAT THIS DOES NOT PROVE: that the Nanded *edition* agrees with Shabad OS.
+ * WHAT THIS DOES NOT PROVE: that the SGPC *edition* agrees with Shabad OS.
  * Input here is corpus-derived, so it carries none of the real orthographic
- * divergence (ਆਪਣੇ/ਅਪਨੇ, ਅਰਿਓ/ਅਰਿਯੋ) seen in live scrapes. Only bin/backfill.js
- * against the live site measures that. Do not treat a green run here as
- * permission to ship.
+ * divergence seen in live scrapes. Only bin/validate.js against cached SGPC
+ * pages measures that. Do not treat a green run here as permission to ship.
  */
 
 const Database = require('better-sqlite3')
@@ -49,29 +48,26 @@ function sample(items, n, rng) {
   return pool.slice(0, take)
 }
 
-const GURMUKHI_DIGITS = '੦੧੨੩੪੫੬੭੮੯'
-const toGurmukhiNum = n => String(n).split('').map(d => GURMUKHI_DIGITS[+d]).join('')
-
 const db = new Database(DB_PATH, { readonly: true })
 const resolver = new Resolver(DB_PATH)
 const linesFor = db.prepare(
   'SELECT gurmukhi, source_page FROM lines WHERE shabad_id = ? ORDER BY order_id'
 )
 
+// The SGPC page carries the ang in its own footer, so it reaches the resolver
+// through opts rather than inside the bani text.
 function simulateScrape(shabadId) {
   const rows = linesFor.all(shabadId)
   if (!rows.length) return null
-  let bani = rows.map(r => toUnicode(r.gurmukhi)).join(' ')
-  bani = bani.replace(/[;,]/g, '  ')             // Nanded uses spacing, not marks
-  bani += ` ਅੰਗ-${toGurmukhiNum(rows[0].source_page)}`
-  return { heading: '', bani }
+  const bani = rows.map(r => toUnicode(r.gurmukhi)).join(' ').replace(/[;,]/g, '  ')
+  return { heading: '', bani, ang: rows[0].source_page }
 }
 
 let exitCode = 0
 
 console.log(`seed=${SEED} n=${N} (override with BENCH_SEED / BENCH_N)\n`)
 
-for (const sourceId of [ 1, 2 ]) {
+for (const sourceId of [ 1 ]) {
   // ORDER BY id, not random(): the seed alone must determine the draw.
   const all = db.prepare(
     'SELECT id FROM shabads WHERE source_id = ? ORDER BY id'
@@ -84,7 +80,7 @@ for (const sourceId of [ 1, 2 ]) {
   for (const id of ids) {
     const input = simulateScrape(id)
     if (!input) continue
-    const r = resolver.resolve(input.heading, input.bani, sourceId)
+    const r = resolver.resolve(input.heading, input.bani, sourceId, { ang: input.ang })
     const right = Array.isArray(r.shabad_ids) && r.shabad_ids.includes(id)
     if (right && r.ok) stat.correctConfident++
     else if (right) stat.correctFlagged++
@@ -94,7 +90,7 @@ for (const sourceId of [ 1, 2 ]) {
     } else stat.refused++
   }
 
-  const label = sourceId === 1 ? 'SGGS' : 'DSG '
+  const label = 'SGGS'
   const n = ids.length
   console.log(
     `${label} n=${n}  correct+confident=${stat.correctConfident} ` +

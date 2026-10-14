@@ -1,6 +1,8 @@
 'use strict'
 
 const assert = require('assert')
+const fs = require('fs')
+const path = require('path')
 const { pack } = require('../lib/pack')
 
 let failures = 0
@@ -44,6 +46,30 @@ check('a failed resolution still reports confidence with empty shabad_ids/line_i
   assert.deepStrictEqual(r.shabad_ids, [])
   assert.deepStrictEqual(r.line_ids, [])
   assert.strictEqual(r.confidence, 'low')
+})
+
+console.log('\ndaily job shares one pack()')
+check('fetch-today.js imports the shared pack instead of defining its own', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'bin', 'fetch-today.js'), 'utf8')
+  assert.match(src, /require\(['"]\.\.\/lib\/pack['"]\)/)
+  assert.doesNotMatch(src, /function pack\s*\(/)
+})
+check('same resolver result packs identically wherever it is called from', () => {
+  const a = pack(SAMPLE_RESULT)
+  const b = pack(SAMPLE_RESULT)
+  assert.deepStrictEqual(a, b)
+  assert.deepStrictEqual(Object.keys(a).sort(), Object.keys(b).sort())
+})
+
+console.log('\narchive output is stable across runs')
+check('fetch-today.js does not stamp a per-run timestamp into the archive', () => {
+  // A generated_at (or any Date.now()/toISOString() field) makes every run's
+  // output differ even when nothing about the hukamnama changed, which
+  // defeats a `git diff --staged --quiet` no-op guard and turns every retry
+  // into a duplicate commit.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'bin', 'fetch-today.js'), 'utf8')
+  assert.doesNotMatch(src, /generated_at/)
+  assert.doesNotMatch(src, /new Date\(\)/)
 })
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')

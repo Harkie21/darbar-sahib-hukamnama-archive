@@ -22,6 +22,12 @@ const NODATA = fs.readFileSync(path.join(FIX, 'archive-2026-10-15-nodata.json'),
 
 const G_ANG = '(ਅੰਗ : ੫੯੮)'
 const E_ANG = '(Page: 598) '
+// The archive fixtures carry no English fields, so tests that need the English footer add it here.
+const withEnglishFooter = (raw, footer) => {
+  const data = JSON.parse(raw)
+  data.hukamnama.efooter2 = footer
+  return JSON.stringify(data)
+}
 const sub = (html, from, to) => {
   assert.ok(html.includes(from), `fixture lacks ${JSON.stringify(from)}`)
   return html.split(from).join(to)
@@ -128,13 +134,17 @@ check('several bani blocks join in page order', () => {
 
 console.log('\narchive')
 check('archive record parses to the same fields, without a time', () => {
-  const a = parseArchive(ARCHIVE)
+  const a = parseArchive(withEnglishFooter(ARCHIVE, E_ANG))
   const l = parseLatest(INDEX)
   assert.strictEqual(a.date, '2026-10-14')
   assert.strictEqual(a.time, null)
   assert.strictEqual(a.bani, l.bani)
   assert.strictEqual(a.heading, l.heading)
   assert.deepStrictEqual([ a.ang, a.ang_ascii, a.ang_gurmukhi, a.ang_field ], [ 598, 598, 598, 598 ])
+})
+check('the stored archive fixture falls back to the Gurmukhi footer ang', () => {
+  const a = parseArchive(ARCHIVE)
+  assert.deepStrictEqual([ a.ang, a.ang_ascii, a.ang_gurmukhi ], [ 598, null, 598 ])
 })
 check('supported=false is NoHukamnamaError', () => {
   throwsKind(() => parseArchiveForDate(NODATA, '2026-10-15'), NoHukamnamaError)
@@ -149,7 +159,7 @@ check('archive garbage is a layout change', () => {
   throwsKind(() => parseArchive(ARCHIVE.replace('"date":"2026-10-14"', '"date":"14-10-2026"')), LayoutChangedError)
 })
 check('archive footers that disagree throw AngMismatchError', () => {
-  throwsKind(() => parseArchive(ARCHIVE.replace('(Page: 598)', '(Page: 597)')), AngMismatchError)
+  throwsKind(() => parseArchive(withEnglishFooter(ARCHIVE, '(Page: 597)')), AngMismatchError)
 })
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')

@@ -6,6 +6,7 @@ const { toUnicode } = require('gurmukhi-utils')
 const {
   Resolver, canon, splitLines, extractAng, extractCounters, THRESHOLDS,
 } = require('../lib/resolve')
+// Each fixture day resolved high here and agreed with gurbaninow in validation/report.md.
 const fixtures = require('./fixtures.json')
 
 const DB_PATH = process.env.SHABADOS_DB

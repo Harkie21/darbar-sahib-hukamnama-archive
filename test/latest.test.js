@@ -42,7 +42,34 @@ const stubRun = (dir, today, env = {}, result = OK_RESULT) => run({
   makeResolver: () => ({ resolve: () => result }),
   corpusVersion: '4.8.7',
   log: () => {},
+  out: () => {},
 })
+
+const RUN_UTC = '2026-10-14T02:07:00.000Z'
+const OTHER_RESULT = { ...OK_RESULT, shabad_ids: [ 'XYZ' ], line_ids: [ 'WXYZ' ], margin: 0.4 }
+
+/** run() with stdout captured. Errors are returned, not thrown, so the line can be checked. */
+async function capture(dir, today, { env = {}, result = OK_RESULT, html = INDEX } = {}) {
+  const lines = []
+  let code = null
+  let error = null
+  try {
+    code = await run({
+      fetchHtml: async () => Buffer.from(html),
+      today: () => today,
+      env,
+      archiveDir: dir,
+      makeResolver: () => ({ resolve: () => result }),
+      corpusVersion: '4.8.7',
+      log: () => {},
+      now: () => RUN_UTC,
+      out: line => lines.push(line),
+    })
+  } catch (e) { error = e }
+  return { code, error, lines }
+}
+
+const read = (dir, ...p) => fs.readFileSync(path.join(dir, ...p), 'utf8')
 
 section('archive/latest.json')
 
@@ -123,6 +150,93 @@ check('a low resolution on the right day throws and writes nothing', async () =>
   const dir = tmpArchiveDir()
   await assert.rejects(stubRun(dir, '2026-10-14', {}, FAILED_RESULT), /sggs_unresolved/)
   assert.deepStrictEqual(listFiles(dir), [])
+})
+
+section('\nrun log line')
+
+check('written: exact line', async () => {
+  const dir = tmpArchiveDir()
+  const { code, lines } = await capture(dir, '2026-10-14')
+  assert.strictEqual(code, 0)
+  assert.deepStrictEqual(lines, [
+    '{"run_utc":"2026-10-14T02:07:00.000Z","page_date":"2026-10-14","page_time":"05:15",' +
+    '"outcome":"written","shabad_ids":["DWV"],"confidence":"high"}',
+  ])
+})
+check('unchanged: a re-run on the same input gives identical bytes', async () => {
+  const dir = tmpArchiveDir()
+  await capture(dir, '2026-10-14')
+  const day1 = read(dir, '2026', '10', '14.json')
+  const latest1 = read(dir, 'latest.json')
+  const { code, lines } = await capture(dir, '2026-10-14')
+  assert.strictEqual(code, 0)
+  assert.deepStrictEqual(lines, [
+    '{"run_utc":"2026-10-14T02:07:00.000Z","page_date":"2026-10-14","page_time":"05:15",' +
+    '"outcome":"unchanged","shabad_ids":["DWV"],"confidence":"high"}',
+  ])
+  assert.strictEqual(read(dir, '2026', '10', '14.json'), day1)
+  assert.strictEqual(read(dir, 'latest.json'), latest1)
+})
+check('replaced: previous_ids reported and both files overwritten identically', async () => {
+  const dir = tmpArchiveDir()
+  await capture(dir, '2026-10-14')
+  const before = read(dir, '2026', '10', '14.json')
+  const { code, lines } = await capture(dir, '2026-10-14', { result: OTHER_RESULT })
+  assert.strictEqual(code, 0)
+  assert.deepStrictEqual(lines, [
+    '{"run_utc":"2026-10-14T02:07:00.000Z","page_date":"2026-10-14","page_time":"05:15",' +
+    '"outcome":"replaced","shabad_ids":["XYZ"],"confidence":"high","previous_ids":["DWV"]}',
+  ])
+  const dated = read(dir, '2026', '10', '14.json')
+  assert.notStrictEqual(dated, before)
+  assert.deepStrictEqual(JSON.parse(dated).shabad_ids, [ 'XYZ' ])
+  assert.strictEqual(read(dir, 'latest.json'), dated)
+})
+check('not_yet: exact line, exit 0, and exit 1 on FINAL_RUN=1', async () => {
+  const dir = tmpArchiveDir()
+  const expected = '{"run_utc":"2026-10-14T02:07:00.000Z","page_date":"2026-10-14","page_time":"05:15",' +
+    '"outcome":"not_yet","shabad_ids":null,"confidence":null}'
+  const a = await capture(dir, '2026-10-15')
+  assert.strictEqual(a.code, 0)
+  assert.deepStrictEqual(a.lines, [ expected ])
+  const b = await capture(dir, '2026-10-15', { env: { FINAL_RUN: '1' } })
+  assert.strictEqual(b.code, 1)
+  assert.deepStrictEqual(b.lines, [ expected ])
+  assert.deepStrictEqual(listFiles(dir), [])
+})
+check('refused on a low resolution: exact line, rethrows, writes nothing', async () => {
+  const dir = tmpArchiveDir()
+  const { error, lines } = await capture(dir, '2026-10-14', { result: FAILED_RESULT })
+  assert.match(error.message, /sggs_unresolved/)
+  assert.deepStrictEqual(lines, [
+    '{"run_utc":"2026-10-14T02:07:00.000Z","page_date":"2026-10-14","page_time":"05:15",' +
+    '"outcome":"refused","shabad_ids":[],"confidence":"low","reason":"sggs_unresolved: low"}',
+  ])
+  assert.deepStrictEqual(listFiles(dir), [])
+})
+check('refused on a layout change: exact line, rethrows, writes nothing', async () => {
+  const dir = tmpArchiveDir()
+  const { error, lines } = await capture(dir, '2026-10-14', { html: '<html></html>' })
+  assert.strictEqual(error.name, 'LayoutChangedError')
+  assert.deepStrictEqual(lines, [
+    '{"run_utc":"2026-10-14T02:07:00.000Z","page_date":null,"page_time":null,' +
+    '"outcome":"refused","shabad_ids":null,"confidence":null,"reason":"layout_changed: empty response"}',
+  ])
+  assert.deepStrictEqual(listFiles(dir), [])
+})
+check('the same line is appended to GITHUB_STEP_SUMMARY when set', async () => {
+  const dir = tmpArchiveDir()
+  const summary = path.join(tmpArchiveDir(), 'summary.md')
+  fs.writeFileSync(summary, '# earlier step\n')
+  const a = await capture(dir, '2026-10-15', { env: { GITHUB_STEP_SUMMARY: summary } })
+  const b = await capture(dir, '2026-10-14', { env: { GITHUB_STEP_SUMMARY: summary } })
+  assert.strictEqual(read(summary), `# earlier step\n${a.lines[0]}\n${b.lines[0]}\n`)
+  assert.ok(!listFiles(dir).some(f => f.includes('summary')))
+})
+check('no summary file is created when GITHUB_STEP_SUMMARY is unset', async () => {
+  const dir = tmpArchiveDir()
+  await capture(dir, '2026-10-14')
+  assert.deepStrictEqual(listFiles(dir).sort(), [ path.join('2026', '10', '14.json'), 'latest.json' ])
 })
 
 ;(async () => {

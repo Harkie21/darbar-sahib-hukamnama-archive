@@ -1,0 +1,65 @@
+name: daily
+
+on:
+  schedule:
+    # The time on the SGPC page is when the mukhvaak was read (about 05:15
+    # IST), not when it was posted. Posting was observed between 07:27 and
+    # 07:54 IST on 2026-10-14, so the page shows yesterday until then.
+    # Runs at 08:07, 09:37, 11:07, 13:37 and 16:37 IST, on minutes off the
+    # hour to stay clear of GitHub's top-of-hour queue. A run before posting
+    # sees a stale page and is a no-op; once a run has written the day, later
+    # runs reproduce the same bytes and the `git diff --staged --quiet` guard
+    # skips the commit.
+    # These times are provisional and will be revised once the run log shows
+    # when SGPC actually posts.
+    - cron: '37 2 * * *'
+    - cron: '7 4 * * *'
+    - cron: '37 5 * * *'
+    - cron: '7 8 * * *'
+    - cron: '7 11 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # 152 MB unpacked. Installed here, never committed.
+      - name: Install pinned corpus
+        run: npm install --no-save @shabados/database@4.8.7
+
+      - name: Fetch and resolve
+        env:
+          SHABADOS_DB: node_modules/@shabados/database/build/database.sqlite
+          SHABADOS_VERSION: 4.8.7
+          # A stale page only fails the last scheduled run. Manual runs are
+          # never final.
+          FINAL_RUN: ${{ github.event.schedule == '7 11 * * *' && '1' || '' }}
+        run: node bin/fetch-today.js
+
+      - name: Commit
+        run: |
+          git config user.name  "hukamnama-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add archive
+          if git diff --staged --quiet; then
+            echo "no change"
+          else
+            git commit -m "chore(archive): $(TZ=Asia/Kolkata date +%F)"
+            git push
+          fi

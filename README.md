@@ -68,7 +68,9 @@ A missing file means the day has not been published, or the resolver declined to
 |---|---|---|
 | `high` | accepted, and 85% of the reading's lines matched at score ≥ 0.88, with every counter in the passage found | Link into your library |
 | `medium` | accepted on weaker evidence than that | Link, but worth logging |
-| `low` | not accepted | Never published. The day is a 404. **Never guess.** |
+| `low` | not accepted | `shabad_ids` is empty. Render nothing, or the source text read-only. **Never guess.** |
+
+This archive never writes a low file: when the resolver declines, the day is a 404.
 
 A resolution is *accepted* when 60% of the reading's lines matched, the average score is ≥ 0.72, the ang veto did not fire, and either `margin` ≥ 0.25 or the passage carries a counter rare enough to anchor it on its own.
 

@@ -1,0 +1,18 @@
+name: probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      # Two requests 3 s apart, no retries, to check the runner can reach SikhNet.
+      - run: |
+          UA='darbar-sahib-hukamnama-archive/0.1 (+https://github.com/Harkie21/darbar-sahib-hukamnama-archive; contact: harkiratsingh135790@gmail.com)'
+          curl -sS -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' -A "$UA" https://www.sikhnet.com/webapps/gmcws/hukam.php
+          sleep 3
+          curl -sS -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' -A "$UA" https://sikhnet.com/hukam

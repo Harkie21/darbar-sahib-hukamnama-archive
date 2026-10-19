@@ -101,6 +101,14 @@ check('short Gurmukhi labels, counters and a two-word example pass in the README
   allPass({ files: { 'README.md': README + 'Five words: ਹਰਿ ਹਰਿ ਨਾਮੁ ਭਜਿਓ ਪੁਰਖੋਤਮੁ\n' } }))
 check('a Latin run of exactly 40 chars passes', () =>
   allPass({ files: { 'test/fixtures/note.json': `{"note":"${'a'.repeat(40)}"}\n` } }))
+check('dandas in a fixture pass', () =>
+  allPass({ files: { 'test/fixtures/day.json': '{"bani":"ਸੋਰਠਿ ਮਹਲਾ ੧ ॥ ਰਹਾਉ । ॥੧॥"}\n' } }))
+check('the allowlisted hukamnamasahib.com titles pass', () => allPass({ files: { 'test/fixtures/hns.html': [
+  '<title>Amrit Vele Da Hukamnama Sri Darbar Sahib, Amritsar, Date 14-10-2026 Ang 598 | Hukamnama Sahib</title>',
+  '<p>Sandhiya Vele Da Hukamnama Sri Darbar Sahib, Amritsar, Date 16-10-2026 Ang 643</p>',
+  '<p>Sangrand Hukamnama Sri Darbar Sahib, Amritsar : Mahina Katak (October 2026)</p>',
+  '',
+].join('\n') } }))
 
 console.log('\nplanted failures')
 check('archive: a dated file fails with the first-push note', () => {
@@ -139,6 +147,17 @@ check('fixtures: a Latin run of 41 chars fails', () =>
   failsOnly(FIXTURES, { files: { 'test/fixtures/note.json': `{"note":"${'a'.repeat(41)}"}\n` } }))
 check('fixtures: an English sentence fails', () =>
   failsOnly(FIXTURES, { files: { 'test/fixtures/day.json': '{"x":"Listen, my mind, to the Name of the Lord and be at peace."}\n' } }))
+check('fixtures: a Devanagari letter fails', () =>
+  failsOnly(FIXTURES, { files: { 'test/fixtures/day.json': '{"bani":"ਸੋਰਠਿ सोरठि ॥"}\n' } }))
+check('fixtures: a Devanagari digit fails', () =>
+  failsOnly(FIXTURES, { files: { 'test/fixtures/day.json': '{"ang":"५९८"}\n' } }))
+check('fixtures: the Punjabi explanation marker fails', () =>
+  failsOnly(FIXTURES, { files: { 'test/fixtures/day.html': '<p>ਅਰਥ: ਹੇ ਮਨ</p>\n' } }))
+check('fixtures: a long Latin run after an allowlisted title fails', () =>
+  failsOnly(FIXTURES, { files: { 'test/fixtures/hns.html':
+    '<p>Amrit Vele Da Hukamnama Sri Darbar Sahib, Amritsar, and then the Lord is merciful to all His servants</p>\n' } }))
+check('fixtures: a title outside the allowlist fails', () =>
+  failsOnly(FIXTURES, { files: { 'test/fixtures/hns.html': '<p>Evening Hukamnama Sri Darbar Sahib, Amritsar today</p>\n' } }))
 check('attribution: a tracked file mentioning it fails', () =>
   failsOnly(ATTRIBUTION, { files: { 'NOTES.md': `written with ${PLANTED_WORD}\n` } }))
 check('attribution: a commit subject mentioning it fails', () =>

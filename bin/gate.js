@@ -18,6 +18,12 @@ const ARCHIVE_NOTE = 'expected before first push only; once the daily job has pu
 const ATTRIBUTION = new RegExp([ 'cl' + 'aude', 'anthr' + 'opic', 'co-' + 'authored' ].join('|'), 'i')
 const TRANSLATION_KEY = /desc|english|^e(heading|hukamnama|footer)/i
 const LATIN_RUN = /\p{Script=Latin}[\p{Script=Latin} ,.;:!?-]*\p{Script=Latin}/gu
+// The hukamnamasahib.com page title is the one long Latin phrase a real fixture needs.
+const TITLE_ALLOW = /^(Amrit Vele Da|Sandhiya Vele Da|Sangrand) Hukamnama Sri Darbar Sahib, Amritsar/
+// Dandas sit in the Devanagari block but belong to Gurmukhi text too.
+const DEVANAGARI = /[\u0900-\u0963\u0966-\u097F]/
+// Opens the Punjabi explanation on hukamnamasahib.com.
+const EXPLANATION = '\u0A05\u0A30\u0A25'
 const GURMUKHI = /[਀-੿]/
 // Whitespace or a danda may separate words so a pasted pankti counts as one run.
 const GURMUKHI_SIX_WORDS = /[਀-੿‌‍]+(?:[\s।॥]+[਀-੿‌‍]+){5,}/
@@ -75,7 +81,7 @@ const CHECKS = [
     },
   },
   {
-    name: 'test fixtures hold no translation keys and no Latin run over 40 chars',
+    name: 'test fixtures hold no translation keys, Devanagari, explanation or Latin run over 40 chars',
     run(root) {
       const problems = []
       for (const f of tracked(root).filter(f => f.startsWith('test/fixtures'))) {
@@ -85,8 +91,13 @@ const CHECKS = [
           if (TRANSLATION_KEY.test(m[1])) problems.push(`${f} key ${m[1]}`)
         }
         for (const m of text.matchAll(LATIN_RUN)) {
-          if (m[0].length > 40) problems.push(`${f} Latin run of ${m[0].length}: ${JSON.stringify(m[0].slice(0, 40))}`)
+          const allowed = m[0].match(TITLE_ALLOW)
+          const run = allowed ? m[0].slice(allowed[0].length) : m[0]
+          if (run.length > 40) problems.push(`${f} Latin run of ${run.length}: ${JSON.stringify(run.slice(0, 40))}`)
         }
+        const deva = text.match(DEVANAGARI)
+        if (deva) problems.push(`${f} Devanagari U+${deva[0].codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`)
+        if (text.includes(EXPLANATION)) problems.push(`${f} explanation marker`)
       }
       return problems.length ? problems.join('; ') : null
     },

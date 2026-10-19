@@ -2,16 +2,17 @@
 'use strict'
 
 /**
- * Daily job. Reads hs.sgpc.net/index.php, resolves the mukhvaak against the
- * pinned Shabad OS corpus, writes archive/YYYY/MM/DD.json and latest.json.
+ * Daily job. Reads today's hukamnamasahib.com morning page, resolves the
+ * mukhvaak against the pinned Shabad OS corpus, writes archive/YYYY/MM/DD.json
+ * and latest.json. SGPC's own site answers 403 to GitHub's runners.
  *
- * Writes NOTHING unless the page shows today's IST date and SGGS resolved.
- * A missing file is a clean 404 the client already handles; a wrong file is
- * wrong Gurbani in front of someone.
+ * Writes NOTHING unless the page is today's IST morning reading and SGGS
+ * resolved. A missing file is a clean 404 the client already handles; a wrong
+ * file is wrong Gurbani in front of someone.
  *
- * The page keeps showing the previous day until SGPC posts, so a stale page
- * is "not yet", not a failure. FINAL_RUN=1 marks the last attempt of the day,
- * where still being stale must go red.
+ * Until the day is posted the site has no page for it, so "no page" is
+ * "not yet", not a failure. FINAL_RUN=1 marks the last attempt of the day,
+ * where still having no page must go red.
  *
  * Every run prints one JSON line to stdout (and the step summary) saying
  * what happened: written, unchanged, replaced, not_yet or refused.
@@ -20,7 +21,8 @@
 const fs = require('fs')
 const path = require('path')
 const { Resolver, SOURCE_SGGS } = require('../lib/resolve')
-const { fetchLatestHtml, parseLatest, todayIST } = require('../lib/scrape')
+const { todayIST } = require('../lib/scrape')
+const { fetchMorningRaw, parseMorningResponse, headingSplitter, NoHukamnamaError } = require('../lib/hns')
 const { pack } = require('../lib/pack')
 const { serialize, datedPath, writeDay, writeLatest } = require('../lib/write')
 
@@ -57,9 +59,11 @@ function defaultResolver() {
 }
 
 /** One run log line. Fixed key order so the line reads the same on every run. */
-function logLine({ run_utc, page_date = null, page_time = null, outcome, shabad_ids = null,
-  confidence = null, reason, previous_ids }) {
-  const entry = { run_utc, page_date, page_time, outcome, shabad_ids, confidence }
+function logLine({ run_utc, page_date = null, page_time = null, page_created_utc = null,
+  page_modified_utc = null, heading_split = null, outcome, shabad_ids = null, confidence = null, reason, previous_ids }) {
+  const entry = {
+    run_utc, page_date, page_time, page_created_utc, page_modified_utc, heading_split, outcome, shabad_ids, confidence,
+  }
   if (outcome === 'refused') entry.reason = reason
   if (outcome === 'replaced') entry.previous_ids = previous_ids
   return JSON.stringify(entry)
@@ -67,11 +71,12 @@ function logLine({ run_utc, page_date = null, page_time = null, outcome, shabad_
 
 /** @returns {Promise<number>} the process exit code */
 async function run({
-  fetchHtml = fetchLatestHtml,
+  fetchPage = fetchMorningRaw,
   today = todayIST,
   env = process.env,
   archiveDir = ARCHIVE_DIR,
   makeResolver = defaultResolver,
+  makeSplitter = headingSplitter,
   corpusVersion = CORPUS_VERSION,
   log = msg => console.error(msg),
   now = () => new Date(Date.now()).toISOString(),
@@ -86,18 +91,30 @@ async function run({
     if (env.GITHUB_STEP_SUMMARY) fs.appendFileSync(env.GITHUB_STEP_SUMMARY, line + '\n')
   }
 
-  const attempt = async () => {
-    const page = parseLatest(String(await fetchHtml()))
-    fields.page_date = page.date
-    fields.page_time = page.time
-    const date = today()
+  let resolver
+  let splitter
+  // Loaded on first use so a run that finds no page never opens the corpus.
+  const getResolver = () => (resolver ??= makeResolver())
+  const splitTail = tail => (splitter ??= makeSplitter(getResolver()))(tail)
 
-    if (page.date !== date) {
-      log(`not_yet ${page.date}`)
+  const attempt = async () => {
+    const date = today()
+    let page
+    try {
+      // Throws DateMismatchError when the dated URL answers with another day.
+      page = parseMorningResponse(await fetchPage(date), date, { splitTail })
+    } catch (err) {
+      if (!(err instanceof NoHukamnamaError)) throw err
+      log(`not_yet ${err.message}`)
       return { code: env.FINAL_RUN === '1' ? 1 : 0, entry: { outcome: 'not_yet' } }
     }
+    fields.page_date = page.date
+    fields.page_time = page.time
+    fields.page_created_utc = page.page_created_utc
+    fields.page_modified_utc = page.page_modified_utc
+    fields.heading_split = page.heading_split
 
-    const r = makeResolver().resolve(page.heading, page.bani, SOURCE_SGGS, { ang: page.ang })
+    const r = getResolver().resolve(page.heading, page.bani, SOURCE_SGGS, { ang: page.ang })
     fields.shabad_ids = r.shabad_ids || []
     fields.confidence = r.confidence
     log(

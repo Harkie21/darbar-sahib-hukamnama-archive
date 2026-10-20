@@ -2,16 +2,14 @@ name: daily
 
 on:
   schedule:
-    # The time on the SGPC page is when the mukhvaak was read (about 05:15
-    # IST), not when it was posted. Posting was observed between 07:27 and
-    # 07:54 IST on 2026-10-14, so the page shows yesterday until then.
+    # The source is hukamnamasahib.com's morning page. Edits on the post's
+    # own date were observed 04:34-23:50 IST, median 05:09.
     # Runs at 08:07, 09:37, 11:07, 13:37 and 16:37 IST, on minutes off the
-    # hour to stay clear of GitHub's top-of-hour queue. A run before posting
-    # sees a stale page and is a no-op; once a run has written the day, later
-    # runs reproduce the same bytes and the `git diff --staged --quiet` guard
-    # skips the commit.
-    # These times are provisional and will be revised once the run log shows
-    # when SGPC actually posts.
+    # hour to stay clear of GitHub's top-of-hour queue, which has run these
+    # slots about 4 h late. A run before posting finds the not-found page and
+    # is a no-op; once a run has written the day, later runs reproduce the
+    # same bytes and the `git diff --staged --quiet` guard skips the commit.
+    # These times are provisional and will be revised from the run log.
     - cron: '37 2 * * *'
     - cron: '7 4 * * *'
     - cron: '37 5 * * *'

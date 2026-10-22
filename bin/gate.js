@@ -10,7 +10,7 @@ const fs = require('fs')
 const path = require('path')
 const { execFileSync, spawnSync } = require('child_process')
 
-const CRONS = [ '37 2 * * *', '7 4 * * *', '37 5 * * *', '7 8 * * *', '7 11 * * *' ]
+const CRONS = [ '43 23 * * *', '13 1 * * *', '43 2 * * *', '13 5 * * *', '7 11 * * *' ]
 const FINAL_CRON = '7 11 * * *'
 const ARCHIVE_NOTE = 'expected before first push only; once the daily job has published, this check fails by design'
 

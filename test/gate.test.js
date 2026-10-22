@@ -168,13 +168,13 @@ check('bodies: a human commit without a body fails', () => failsOnly(BODIES, { b
 check('schema: a failing schema test fails', () =>
   failsOnly(SCHEMA, { files: { 'test/schema.test.js': 'process.exit(1)\n' } }))
 check('daily: a missing cron fails', () =>
-  failsOnly(DAILY, { files: { '.github/workflows/daily.yml': DAILY_YML.replace("    - cron: '7 8 * * *'\n", '') } }))
+  failsOnly(DAILY, { files: { '.github/workflows/daily.yml': DAILY_YML.replace("    - cron: '43 2 * * *'\n", '') } }))
 check('daily: an extra cron fails', () =>
   failsOnly(DAILY, { files: { '.github/workflows/daily.yml':
     DAILY_YML.replace("    - cron: '7 11 * * *'\n", "    - cron: '7 11 * * *'\n    - cron: '7 14 * * *'\n") } }))
 check('daily: FINAL_RUN naming another run fails', () =>
   failsOnly(DAILY, { files: { '.github/workflows/daily.yml':
-    DAILY_YML.replace("schedule == '7 11 * * *'", "schedule == '7 8 * * *'") } }))
+    DAILY_YML.replace("schedule == '7 11 * * *'", "schedule == '13 5 * * *'") } }))
 check('daily: FINAL_RUN naming the last run twice fails', () =>
   failsOnly(DAILY, { files: { '.github/workflows/daily.yml':
     DAILY_YML.replace("schedule == '7 11 * * *'", "schedule == '7 11 * * *' || github.event.schedule == '7 11 * * *'") } }))

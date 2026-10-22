@@ -3,17 +3,17 @@ name: daily
 on:
   schedule:
     # The source is hukamnamasahib.com's morning page. Edits on the post's
-    # own date were observed 04:34-23:50 IST, median 05:09.
-    # Runs at 08:07, 09:37, 11:07, 13:37 and 16:37 IST, on minutes off the
+    # own date (n=111) have a median of 05:09 IST, p75 05:21, p90 07:03.
+    # Runs at 05:13, 06:43, 08:13, 10:43 and 16:37 IST, on minutes off the
     # hour to stay clear of GitHub's top-of-hour queue, which has run these
-    # slots about 4 h late. A run before posting finds the not-found page and
+    # slots 3.8-5.3 h late. A run before posting finds the not-found page and
     # is a no-op; once a run has written the day, later runs reproduce the
     # same bytes and the `git diff --staged --quiet` guard skips the commit.
     # These times are provisional and will be revised from the run log.
-    - cron: '37 2 * * *'
-    - cron: '7 4 * * *'
-    - cron: '37 5 * * *'
-    - cron: '7 8 * * *'
+    - cron: '43 23 * * *'
+    - cron: '13 1 * * *'
+    - cron: '43 2 * * *'
+    - cron: '13 5 * * *'
     - cron: '7 11 * * *'
   workflow_dispatch:
 

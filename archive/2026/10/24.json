@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-24",
+  "source": "darbar_sahib",
+  "shabad_ids": [
+    "BLU"
+  ],
+  "sggs": {
+    "shabad_ids": [
+      "BLU"
+    ],
+    "line_ids": [
+      "MZMY",
+      "81L8",
+      "V557",
+      "KPGK",
+      "B4ZV",
+      "HQ8J"
+    ],
+    "confidence": "high",
+    "score": 1,
+    "margin": 0.569,
+    "ang": 718,
+    "ang_delta": 0,
+    "counters": [
+      1,
+      1,
+      2
+    ]
+  },
+  "dsg": null,
+  "corpus": {
+    "name": "@shabados/database",
+    "version": "4.8.7"
+  }
+}

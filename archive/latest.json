@@ -1,30 +1,33 @@
 {
-  "date": "2026-10-24",
+  "date": "2026-10-25",
   "source": "darbar_sahib",
   "shabad_ids": [
-    "BLU"
+    "P5H"
   ],
   "sggs": {
     "shabad_ids": [
-      "BLU"
+      "P5H"
     ],
     "line_ids": [
-      "MZMY",
-      "81L8",
-      "V557",
-      "KPGK",
-      "B4ZV",
-      "HQ8J"
+      "AXLT",
+      "G9XJ",
+      "X8JX",
+      "9AHM",
+      "BR4T",
+      "Q2CG",
+      "JMDJ",
+      "KEQP"
     ],
     "confidence": "high",
     "score": 1,
-    "margin": 0.569,
-    "ang": 718,
+    "margin": 0.559,
+    "ang": 678,
     "ang_delta": 0,
     "counters": [
       1,
-      1,
-      2
+      2,
+      3,
+      29
     ]
   },
   "dsg": null,

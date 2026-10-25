@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-21",
+  "source": "darbar_sahib",
+  "shabad_ids": [
+    "UKL"
+  ],
+  "sggs": {
+    "shabad_ids": [
+      "UKL"
+    ],
+    "line_ids": [
+      "6CJS",
+      "YDBK",
+      "YJS3",
+      "YF2J",
+      "MG51",
+      "MFDM",
+      "TB71",
+      "5SEZ",
+      "2TRS",
+      "V0SX",
+      "QAAV",
+      "NUA3",
+      "9101",
+      "UNCK",
+      "RCWJ",
+      "V40N",
+      "QGBG",
+      "VKNW",
+      "D5K0",
+      "W3N1"
+    ],
+    "confidence": "high",
+    "score": 0.998,
+    "margin": 0.596,
+    "ang": 686,
+    "ang_delta": 0,
+    "counters": [
+      1,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      1,
+      1
+    ]
+  },
+  "dsg": null,
+  "corpus": {
+    "name": "@shabados/database",
+    "version": "4.8.7"
+  }
+}

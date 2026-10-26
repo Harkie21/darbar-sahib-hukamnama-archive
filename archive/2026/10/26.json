@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-26",
+  "source": "darbar_sahib",
+  "shabad_ids": [
+    "M34"
+  ],
+  "sggs": {
+    "shabad_ids": [
+      "M34"
+    ],
+    "line_ids": [
+      "MH50",
+      "BQ7U",
+      "X4Q1",
+      "MYEQ",
+      "FPZ5",
+      "NS8G"
+    ],
+    "confidence": "high",
+    "score": 0.984,
+    "margin": 0.545,
+    "ang": 694,
+    "ang_delta": 0,
+    "counters": [
+      1,
+      2
+    ]
+  },
+  "dsg": null,
+  "corpus": {
+    "name": "@shabados/database",
+    "version": "4.8.7"
+  }
+}

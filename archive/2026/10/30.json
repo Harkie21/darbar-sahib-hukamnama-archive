@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-30",
+  "source": "darbar_sahib",
+  "shabad_ids": [
+    "K14"
+  ],
+  "sggs": {
+    "shabad_ids": [
+      "K14"
+    ],
+    "line_ids": [
+      "GJPU",
+      "CVN8",
+      "HQQN",
+      "E785",
+      "D7G7",
+      "FY7G",
+      "GTY8",
+      "3GJV",
+      "CRQA",
+      "RYG1"
+    ],
+    "confidence": "high",
+    "score": 1,
+    "margin": 0.503,
+    "ang": 670,
+    "ang_delta": 0,
+    "counters": [
+      1,
+      2,
+      3,
+      4,
+      13
+    ]
+  },
+  "dsg": null,
+  "corpus": {
+    "name": "@shabados/database",
+    "version": "4.8.7"
+  }
+}

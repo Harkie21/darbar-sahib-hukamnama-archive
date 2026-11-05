@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-05",
+  "source": "darbar_sahib",
+  "shabad_ids": [
+    "HUY"
+  ],
+  "sggs": {
+    "shabad_ids": [
+      "HUY"
+    ],
+    "line_ids": [
+      "938U",
+      "SMD2",
+      "HERS",
+      "PK5T",
+      "NHKB",
+      "5RJ5",
+      "S3VX",
+      "76FN"
+    ],
+    "confidence": "high",
+    "score": 1,
+    "margin": 0.549,
+    "ang": 857,
+    "ang_delta": 0,
+    "counters": [
+      1,
+      1,
+      2,
+      3
+    ]
+  },
+  "dsg": null,
+  "corpus": {
+    "name": "@shabados/database",
+    "version": "4.8.7"
+  }
+}

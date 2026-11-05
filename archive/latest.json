@@ -1,49 +1,33 @@
 {
-  "date": "2026-11-04",
+  "date": "2026-11-05",
   "source": "darbar_sahib",
   "shabad_ids": [
-    "FP7"
+    "HUY"
   ],
   "sggs": {
     "shabad_ids": [
-      "FP7"
+      "HUY"
     ],
     "line_ids": [
-      "PKWT",
-      "7Q19",
-      "8C0L",
-      "D9JF",
-      "LAH7",
-      "V54W",
-      "EKP1",
-      "H45M",
-      "UDXY",
-      "JUYQ",
-      "RKTC",
-      "6WM3",
-      "W61U",
-      "31QB",
-      "MCXJ",
-      "L5Z5",
-      "D70U",
-      "Y05R",
-      "WX1N",
-      "N3T2",
-      "ZPKU",
-      "4CBY",
-      "P04E",
-      "7BUE"
+      "938U",
+      "SMD2",
+      "HERS",
+      "PK5T",
+      "NHKB",
+      "5RJ5",
+      "S3VX",
+      "76FN"
     ],
     "confidence": "high",
     "score": 1,
-    "margin": 0.533,
-    "ang": 845,
+    "margin": 0.549,
+    "ang": 857,
     "ang_delta": 0,
     "counters": [
       1,
+      1,
       2,
-      3,
-      4
+      3
     ]
   },
   "dsg": null,

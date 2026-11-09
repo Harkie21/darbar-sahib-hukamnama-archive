@@ -1,33 +1,36 @@
 {
-  "date": "2026-11-08",
+  "date": "2026-11-09",
   "source": "darbar_sahib",
   "shabad_ids": [
-    "P5H"
+    "0US"
   ],
   "sggs": {
     "shabad_ids": [
-      "P5H"
+      "0US"
     ],
     "line_ids": [
-      "AXLT",
-      "G9XJ",
-      "X8JX",
-      "9AHM",
-      "BR4T",
-      "Q2CG",
-      "JMDJ",
-      "KEQP"
+      "5QS5",
+      "GGFZ",
+      "RTUB",
+      "19PY",
+      "WD7H",
+      "L933",
+      "RMSV",
+      "SU79",
+      "FB5Q",
+      "H9TT"
     ],
     "confidence": "high",
-    "score": 1,
-    "margin": 0.559,
-    "ang": 678,
+    "score": 0.954,
+    "margin": 0.503,
+    "ang": 673,
     "ang_delta": 0,
     "counters": [
       1,
+      1,
       2,
       3,
-      29
+      4
     ]
   },
   "dsg": null,

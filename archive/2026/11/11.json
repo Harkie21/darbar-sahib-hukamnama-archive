@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-11",
+  "source": "darbar_sahib",
+  "shabad_ids": [
+    "GPC"
+  ],
+  "sggs": {
+    "shabad_ids": [
+      "GPC"
+    ],
+    "line_ids": [
+      "YSMP",
+      "6CEZ",
+      "ZTJH",
+      "CPVP",
+      "FV92",
+      "ZN2C"
+    ],
+    "confidence": "high",
+    "score": 1,
+    "margin": 0.571,
+    "ang": 680,
+    "ang_delta": 0,
+    "counters": [
+      1,
+      2,
+      36
+    ]
+  },
+  "dsg": null,
+  "corpus": {
+    "name": "@shabados/database",
+    "version": "4.8.7"
+  }
+}

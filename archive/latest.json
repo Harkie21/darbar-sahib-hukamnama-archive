@@ -1,30 +1,29 @@
 {
-  "date": "2026-11-13",
+  "date": "2026-11-14",
   "source": "darbar_sahib",
   "shabad_ids": [
-    "LQ1"
+    "KH0"
   ],
   "sggs": {
     "shabad_ids": [
-      "LQ1"
+      "KH0"
     ],
     "line_ids": [
-      "ASEV",
-      "QDNW",
-      "C829",
-      "WWEP",
-      "24JM",
-      "HUXQ"
+      "6H3R",
+      "G238",
+      "X8SL",
+      "S8G9",
+      "CFUD"
     ],
     "confidence": "high",
     "score": 1,
-    "margin": 0.513,
-    "ang": 682,
+    "margin": 0.524,
+    "ang": 692,
     "ang_delta": 0,
     "counters": [
       1,
-      2,
-      47
+      1,
+      2
     ]
   },
   "dsg": null,

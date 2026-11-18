@@ -1,33 +1,29 @@
 {
-  "date": "2026-11-17",
+  "date": "2026-11-18",
   "source": "darbar_sahib",
   "shabad_ids": [
-    "HCZ"
+    "F6Q"
   ],
   "sggs": {
     "shabad_ids": [
-      "HCZ"
+      "F6Q"
     ],
     "line_ids": [
-      "1FQ4",
-      "5CX6",
-      "99VF",
-      "384Z",
-      "NF1U",
-      "9WR3",
-      "0NDE",
-      "JXUR",
-      "70N6",
-      "BBZZ",
-      "HTMG",
-      "785L",
-      "GKQP",
-      "LM82"
+      "GM4Y",
+      "K4EG",
+      "WSJC",
+      "DXAB",
+      "1A8J",
+      "U9CS",
+      "XUV9",
+      "U643",
+      "U5CH",
+      "6HUL"
     ],
     "confidence": "high",
     "score": 1,
-    "margin": 0.419,
-    "ang": 604,
+    "margin": 0.485,
+    "ang": 609,
     "ang_delta": 0,
     "counters": [
       1,

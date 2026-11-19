@@ -137,21 +137,23 @@ const CHECKS = [
     },
   },
   {
-    name: 'daily.yml has the five crons and FINAL_RUN names the last one once',
+    name: 'daily.yml has the five crons, and FINAL_RUN and the concurrency group name the last one once',
     run(root) {
       const yml = readIf(root, '.github/workflows/daily.yml')
       if (yml == null) return '.github/workflows/daily.yml missing'
       const crons = [ ...yml.matchAll(/^\s*-\s*cron:\s*'([^']*)'\s*$/gm) ].map(m => m[1])
       if (JSON.stringify(crons) !== JSON.stringify(CRONS)) return `crons are ${JSON.stringify(crons)}`
-      const finalLines = yml.split('\n').filter(l => /^\s*FINAL_RUN:/.test(l))
-      if (finalLines.length !== 1) return `${finalLines.length} FINAL_RUN lines`
       const quoted = `'${FINAL_CRON}'`
-      const inFinal = finalLines[0].split(quoted).length - 1
-      if (inFinal !== 1 || !finalLines[0].includes(`github.event.schedule == ${quoted}`)) {
-        return `FINAL_RUN expression names ${quoted} ${inFinal} times`
+      for (const key of [ 'FINAL_RUN', 'group' ]) {
+        const lines = yml.split('\n').filter(l => new RegExp(`^\\s*${key}:`).test(l))
+        if (lines.length !== 1) return `${lines.length} ${key} lines`
+        const named = lines[0].split(quoted).length - 1
+        if (named !== 1 || !lines[0].includes(`github.event.schedule == ${quoted}`)) {
+          return `${key} expression names ${quoted} ${named} times`
+        }
       }
       const total = yml.split(quoted).length - 1
-      return total === 2 ? null : `${quoted} appears ${total} times, expected the cron and the FINAL_RUN expression`
+      return total === 3 ? null : `${quoted} appears ${total} times, expected the cron, the FINAL_RUN expression and the group`
     },
   },
 ]

@@ -23,7 +23,7 @@
 const fs = require('fs')
 const path = require('path')
 const { Resolver, SOURCE_SGGS } = require('../lib/resolve')
-const { todayIST, slotDayIST } = require('../lib/scrape')
+const { istDate, slotDayIST } = require('../lib/scrape')
 const { fetchMorningRaw, parseMorningResponse, headingSplitter, NoHukamnamaError } = require('../lib/hns')
 const { pack } = require('../lib/pack')
 const { serialize, datedPath, writeDay, writeLatest } = require('../lib/write')
@@ -74,7 +74,6 @@ function logLine({ run_utc, page_date = null, page_time = null, page_created_utc
 /** @returns {Promise<number>} the process exit code */
 async function run({
   fetchPage = fetchMorningRaw,
-  today = todayIST,
   env = process.env,
   archiveDir = ARCHIVE_DIR,
   makeResolver = defaultResolver,
@@ -100,7 +99,8 @@ async function run({
   const splitTail = tail => (splitter ??= makeSplitter(getResolver()))(tail)
 
   const attempt = async () => {
-    const date = slotDayIST(env.SCHEDULE, new Date(fields.run_utc)) ?? today()
+    const startedAt = new Date(fields.run_utc)
+    const date = slotDayIST(env.SCHEDULE, startedAt) ?? istDate(startedAt.getTime())
     let page
     try {
       // Throws DateMismatchError when the dated URL answers with another day.
@@ -127,6 +127,10 @@ async function run({
     // SGGS is the whole reading. If it did not resolve, buildPayload throws.
     const payload = buildPayload(date, { sggs: r }, corpusVersion)
 
+    // Read before any write so an unreadable latest.json leaves nothing half written.
+    const latestFile = path.join(archiveDir, 'latest.json')
+    const latestDate = fs.existsSync(latestFile) ? JSON.parse(fs.readFileSync(latestFile, 'utf8')).date : null
+
     const file = datedPath(archiveDir, date)
     let outcome = 'written'
     let previousIds
@@ -148,8 +152,6 @@ async function run({
     log(`wrote ${path.relative(process.cwd(), file)}`)
 
     // A late slot writing its own earlier day must not take latest.json backwards.
-    const latestFile = path.join(archiveDir, 'latest.json')
-    const latestDate = fs.existsSync(latestFile) ? JSON.parse(fs.readFileSync(latestFile, 'utf8')).date : null
     if (latestDate && latestDate > date) {
       log(`kept ${path.relative(process.cwd(), latestFile)} at ${latestDate}`)
     } else {

@@ -42,26 +42,28 @@ const ok = html => ({ status: 200, body: Buffer.from(html) })
 // The site answers today's URL with the 10-14 page on 10-14 and its not-found page otherwise.
 const SITE = async date => ok(date === '2026-10-14' ? MORNING : NOT_FOUND)
 
-const stubRun = (dir, today, env = {}, result = OK_RESULT) => run({
+// A run started at 07:37 IST on `day`, so a run with no SCHEDULE asks for `day`.
+const startedOn = day => `${day}T02:07:00.000Z`
+
+const stubRun = (dir, day, env = {}, result = OK_RESULT) => run({
   fetchPage: SITE,
-  today: () => today,
   env,
   archiveDir: dir,
   makeResolver: () => ({ resolve: () => result }),
   makeSplitter: () => () => null,
   corpusVersion: '4.8.7',
   log: () => {},
+  now: () => startedOn(day),
   out: () => {},
 })
 
-const RUN_UTC = '2026-10-14T02:07:00.000Z'
 const OTHER_RESULT = { ...OK_RESULT, shabad_ids: [ 'XYZ' ], line_ids: [ 'WXYZ' ], margin: 0.4 }
 const PAGE = '"page_date":"2026-10-14","page_time":null,"page_created_utc":null,' +
   '"page_modified_utc":"2026-10-13T23:53:49.000Z","heading_split":false'
 const NO_PAGE = '"page_date":null,"page_time":null,"page_created_utc":null,"page_modified_utc":null,"heading_split":null'
 
 /** run() with stdout captured. Errors are returned, not thrown, so the line can be checked. */
-async function capture(dir, today, { env = {}, result = OK_RESULT, fetchPage = SITE, splitTail = () => null, runUtc = RUN_UTC } = {}) {
+async function capture(dir, day, { env = {}, result = OK_RESULT, fetchPage = SITE, splitTail = () => null, runUtc = startedOn(day) } = {}) {
   const lines = []
   const asked = []
   let code = null
@@ -69,7 +71,6 @@ async function capture(dir, today, { env = {}, result = OK_RESULT, fetchPage = S
   try {
     code = await run({
       fetchPage: async date => { asked.push(date); return fetchPage(date) },
-      today: () => today,
       env,
       archiveDir: dir,
       makeResolver: () => ({ resolve: () => result }),
@@ -227,7 +228,7 @@ check('replaced: previous_ids reported and both files overwritten identically', 
 })
 check('not_yet (no page yet): exact line, exit 0, and exit 1 on FINAL_RUN=1', async () => {
   const dir = tmpArchiveDir()
-  const expected = `{"run_utc":"2026-10-14T02:07:00.000Z",${NO_PAGE},"outcome":"not_yet","shabad_ids":null,"confidence":null}`
+  const expected = `{"run_utc":"2026-10-15T02:07:00.000Z",${NO_PAGE},"outcome":"not_yet","shabad_ids":null,"confidence":null}`
   const a = await capture(dir, '2026-10-15')
   assert.strictEqual(a.code, 0)
   assert.deepStrictEqual(a.lines, [ expected ])
@@ -248,7 +249,7 @@ check('refused (yesterday\'s page at today\'s URL): DateMismatchError, writes no
   const { error, lines } = await capture(dir, '2026-10-15', { fetchPage: async () => ok(MORNING), env: { FINAL_RUN: '1' } })
   assert.strictEqual(error.name, 'DateMismatchError')
   assert.deepStrictEqual(lines, [
-    `{"run_utc":"2026-10-14T02:07:00.000Z",${NO_PAGE},"outcome":"refused","shabad_ids":null,"confidence":null,` +
+    `{"run_utc":"2026-10-15T02:07:00.000Z",${NO_PAGE},"outcome":"refused","shabad_ids":null,"confidence":null,` +
     '"reason":"date_mismatch: requested 2026-10-15, got 2026-10-14"}',
   ])
   assert.deepStrictEqual(listFiles(dir), [])
@@ -305,7 +306,7 @@ check('no summary file is created when GITHUB_STEP_SUMMARY is unset', async () =
 section('\nscheduled slot day')
 
 check('slotDayIST: the slot\'s IST day, however late the run starts', () => {
-  // 11:07 UTC is 16:37 IST; on 17 Nov it started at 19:43 UTC, already 01:13 IST on the 18th.
+  // The 16:37 IST slot of 17 Nov started at 19:43 UTC which is already 18 Nov in IST.
   assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-17T19:43:00Z')), '2026-11-17')
   assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-17T11:07:00Z')), '2026-11-17')
   assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-18T09:00:00Z')), '2026-11-17')
@@ -336,9 +337,22 @@ check('a late final slot still goes red when its own day never appeared', async 
   assert.deepStrictEqual(asked, [ '2026-10-15' ])
   assert.strictEqual(JSON.parse(lines[0]).outcome, 'not_yet')
 })
-check('a manual run asks for today', async () => {
+check('a manual run asks for the IST day of its own start', async () => {
   const { asked } = await capture(tmpArchiveDir(), '2026-10-15', { env: { SCHEDULE: '' }, runUtc: '2026-10-14T19:43:00.000Z' })
   assert.deepStrictEqual(asked, [ '2026-10-15' ])
+  // 18:29 UTC is 23:59 IST and 18:30 UTC is IST midnight.
+  for (const [ runUtc, day ] of [ [ '2026-10-14T18:29:59.000Z', '2026-10-14' ], [ '2026-10-14T18:30:00.000Z', '2026-10-15' ] ]) {
+    assert.deepStrictEqual((await capture(tmpArchiveDir(), day, { runUtc })).asked, [ day ])
+  }
+})
+check('an unreadable latest.json is refused before the dated file is written', async () => {
+  const dir = tmpArchiveDir()
+  fs.writeFileSync(path.join(dir, 'latest.json'), '{"date":')
+  const { error, lines } = await capture(dir, '2026-10-14')
+  assert.ok(error instanceof SyntaxError)
+  assert.strictEqual(JSON.parse(lines[0]).outcome, 'refused')
+  assert.deepStrictEqual(listFiles(dir), [ 'latest.json' ])
+  assert.strictEqual(read(dir, 'latest.json'), '{"date":')
 })
 check('writing an earlier day never takes latest.json backwards', async () => {
   const dir = tmpArchiveDir()

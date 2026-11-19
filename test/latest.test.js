@@ -288,6 +288,39 @@ check('refused on HTTP 403: exact reason, writes nothing', async () => {
   assert.strictEqual(JSON.parse(lines[0]).reason, 'http_403: https://hukamnamasahib.com/hukamnama/2026-10-14-morning')
   assert.deepStrictEqual(listFiles(dir), [])
 })
+check('unavailable (5xx after the retries): exact line, exit 0, and exit 1 on FINAL_RUN=1', async () => {
+  const dir = tmpArchiveDir()
+  const fetchPage = async () => ({ status: 503, body: Buffer.from('') })
+  const expected = `{"run_utc":"2026-10-14T02:07:00.000Z",${NO_PAGE},"outcome":"unavailable","shabad_ids":null,"confidence":null,` +
+    '"reason":"http_503: https://hukamnamasahib.com/hukamnama/2026-10-14-morning"}'
+  const a = await capture(dir, '2026-10-14', { fetchPage })
+  assert.strictEqual(a.code, 0)
+  assert.deepStrictEqual(a.lines, [ expected ])
+  const b = await capture(dir, '2026-10-14', { fetchPage, env: { FINAL_RUN: '1' } })
+  assert.strictEqual(b.error, null)
+  assert.strictEqual(b.code, 1)
+  assert.deepStrictEqual(b.lines, [ expected ])
+  assert.deepStrictEqual(listFiles(dir), [])
+})
+check('unavailable on a timeout or a dropped connection after the retries', async () => {
+  const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+  for (const err of [ timeout, new TypeError('fetch failed') ]) {
+    const dir = tmpArchiveDir()
+    const { code, error, lines } = await capture(dir, '2026-10-14', { fetchPage: async () => { throw err } })
+    assert.strictEqual(error, null)
+    assert.strictEqual(code, 0)
+    assert.deepStrictEqual([ JSON.parse(lines[0]).outcome, JSON.parse(lines[0]).reason ], [ 'unavailable', err.message ])
+    assert.deepStrictEqual(listFiles(dir), [])
+  }
+})
+check('a redirect or any other thrown error is still refused', async () => {
+  const redirect = await capture(tmpArchiveDir(), '2026-10-14', { fetchPage: async () => ({ status: 301, body: Buffer.from('') }) })
+  assert.strictEqual(redirect.error.name, 'HttpError')
+  assert.strictEqual(JSON.parse(redirect.lines[0]).outcome, 'refused')
+  const boom = await capture(tmpArchiveDir(), '2026-10-14', { fetchPage: async () => { throw new Error('boom') } })
+  assert.strictEqual(boom.error.message, 'boom')
+  assert.strictEqual(JSON.parse(boom.lines[0]).outcome, 'refused')
+})
 check('the same line is appended to GITHUB_STEP_SUMMARY when set', async () => {
   const dir = tmpArchiveDir()
   const summary = path.join(tmpArchiveDir(), 'summary.md')

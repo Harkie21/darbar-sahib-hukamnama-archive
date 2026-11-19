@@ -230,7 +230,7 @@ for seed in 1 2 3 4 5; do BENCH_SEED=$seed node test/bench.js; done
 
 The corpus is 152 MB unpacked and is **never committed**. CI installs it fresh each run, pinned.
 
-The daily job (`bin/fetch-today.js`) writes nothing on failure and exits non-zero, so the workflow goes red rather than publishing something wrong. A missing file is a clean 404; a wrong file is wrong Gurbani in front of someone. It runs on five cron slots a day (05:13 to 16:37 IST), and an outside timer also dispatches it every 15 minutes through the morning window (04:30 to 12:15 IST), because GitHub has started the cron slots 5 to 9 hours late. A run that finds no morning page for today yet is a no-op, and only the last scheduled run (`FINAL_RUN=1`) goes red if the day never appeared. That slot has a concurrency group of its own, so a dispatched run never replaces it while it waits. Each request gets 60 seconds and is retried up to 3 times, 5, 15 and 45 seconds apart, on a timeout, a dropped connection or a 5xx. A scheduled run asks for the IST day of its own slot rather than its start time, because GitHub can start the 16:37 IST slot after IST midnight; `latest.json` never moves back to an earlier day. On the validation days the source's pages were last modified at a median of 05:09 IST on their own date.
+The daily job (`bin/fetch-today.js`) writes nothing on failure and exits non-zero, so the workflow goes red rather than publishing something wrong. A missing file is a clean 404; a wrong file is wrong Gurbani in front of someone. It runs on five cron slots a day (05:13 to 16:37 IST), and an outside timer also dispatches it every 15 minutes through the morning window (04:30 to 12:15 IST), because GitHub has started the cron slots 5 to 9 hours late. A run that finds no morning page for today yet is a no-op, and only the last scheduled run (`FINAL_RUN=1`) goes red if the day never appeared. That slot has a concurrency group of its own, so a dispatched run never replaces it while it waits. Each request gets 60 seconds and is retried up to 3 times, 5, 15 and 45 seconds apart, on a timeout, a dropped connection or a 5xx. A site still down after the retries is `unavailable`, which like `not_yet` exits 0 and goes red only on the final run. A redirect, any other HTTP error, a layout change or a refused resolution goes red on every run. A scheduled run asks for the IST day of its own slot rather than its start time, because GitHub can start the 16:37 IST slot after IST midnight; `latest.json` never moves back to an earlier day. On the validation days the source's pages were last modified at a median of 05:09 IST on their own date.
 
 Every run prints one JSON line to stdout and to the GitHub step summary:
 
@@ -241,7 +241,7 @@ Every run prints one JSON line to stdout and to the GitHub step summary:
 - `page_date`: the date the page says it is for. `page_time` is always `null` (the source gives no reading time).
 - `page_created_utc`, `page_modified_utc`: the post's own timestamps from the page data, `null` when absent.
 - `heading_split`: `true` when the parser split a heading off the first line because the source left out the danda between them, `false` otherwise, `null` when no page was read.
-- `outcome`: `written`, `unchanged` (a re-run reproduced the same bytes), `replaced` (the day changed after it was first written; adds `previous_ids`), `not_yet` (no morning page for today yet) or `refused` (adds `reason`).
+- `outcome`: `written`, `unchanged` (a re-run reproduced the same bytes), `replaced` (the day changed after it was first written; adds `previous_ids`), `not_yet` (no morning page for today yet), `unavailable` (the site timed out, dropped the connection or answered 5xx on every retry; adds `reason`) or `refused` (adds `reason`).
 
 The line is never written to a file, so `archive/` stays byte-identical across re-runs. None of these fields appear in the archive files.
 
@@ -251,7 +251,7 @@ Politeness: each run makes one request, plus at most three retries of a failed o
 
 | Script | Purpose |
 |---|---|
-| `bin/fetch-today.js` | Daily job. Writes nothing on failure and exits non-zero; a day not posted yet exits 0 unless `FINAL_RUN=1`. |
+| `bin/fetch-today.js` | Daily job. Writes nothing on failure and exits non-zero; a day not posted yet or a site still down after retries exits 0 unless `FINAL_RUN=1`. |
 | `bin/poll-latest.js` | Polls the index page every 30 minutes to measure when SGPC posts. Writes `poll-log.txt` only. |
 | `bin/harvest-validation.js` | Cache-first fetch of archive days for validation. Resumable. |
 | `bin/validate.js` | Resolves the cached days and compares them with gurbaninow. |

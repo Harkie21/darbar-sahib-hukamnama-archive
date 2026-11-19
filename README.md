@@ -230,7 +230,7 @@ for seed in 1 2 3 4 5; do BENCH_SEED=$seed node test/bench.js; done
 
 The corpus is 152 MB unpacked and is **never committed**. CI installs it fresh each run, pinned.
 
-The daily job (`bin/fetch-today.js`) writes nothing on failure and exits non-zero, so the workflow goes red rather than publishing something wrong. A missing file is a clean 404; a wrong file is wrong Gurbani in front of someone. It runs five times a day (08:07 to 16:37 IST). A run that finds no morning page for today yet is a no-op, and only the last scheduled run (`FINAL_RUN=1`) goes red if the day never appeared. On the validation days the source's pages were last modified at a median of 05:09 IST on their own date.
+The daily job (`bin/fetch-today.js`) writes nothing on failure and exits non-zero, so the workflow goes red rather than publishing something wrong. A missing file is a clean 404; a wrong file is wrong Gurbani in front of someone. It runs five times a day (05:13 to 16:37 IST). A run that finds no morning page for today yet is a no-op, and only the last scheduled run (`FINAL_RUN=1`) goes red if the day never appeared. A scheduled run asks for the IST day of its own slot rather than its start time, because GitHub can start the 16:37 IST slot after IST midnight; `latest.json` never moves back to an earlier day. On the validation days the source's pages were last modified at a median of 05:09 IST on their own date.
 
 Every run prints one JSON line to stdout and to the GitHub step summary:
 

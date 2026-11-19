@@ -12,7 +12,9 @@
  *
  * Until the day is posted the site has no page for it, so "no page" is
  * "not yet", not a failure. FINAL_RUN=1 marks the last attempt of the day,
- * where still having no page must go red.
+ * where still having no page must go red. A scheduled run (SCHEDULE set to
+ * its cron line) asks for its slot's IST day, so a slot GitHub starts after
+ * IST midnight still judges the day it was meant for.
  *
  * Every run prints one JSON line to stdout (and the step summary) saying
  * what happened: written, unchanged, replaced, not_yet or refused.
@@ -21,7 +23,7 @@
 const fs = require('fs')
 const path = require('path')
 const { Resolver, SOURCE_SGGS } = require('../lib/resolve')
-const { todayIST } = require('../lib/scrape')
+const { todayIST, slotDayIST } = require('../lib/scrape')
 const { fetchMorningRaw, parseMorningResponse, headingSplitter, NoHukamnamaError } = require('../lib/hns')
 const { pack } = require('../lib/pack')
 const { serialize, datedPath, writeDay, writeLatest } = require('../lib/write')
@@ -98,7 +100,7 @@ async function run({
   const splitTail = tail => (splitter ??= makeSplitter(getResolver()))(tail)
 
   const attempt = async () => {
-    const date = today()
+    const date = slotDayIST(env.SCHEDULE, new Date(fields.run_utc)) ?? today()
     let page
     try {
       // Throws DateMismatchError when the dated URL answers with another day.
@@ -145,8 +147,15 @@ async function run({
     writeDay(archiveDir, payload)
     log(`wrote ${path.relative(process.cwd(), file)}`)
 
-    writeLatest(archiveDir, payload)
-    log(`wrote ${path.relative(process.cwd(), path.join(archiveDir, 'latest.json'))}`)
+    // A late slot writing its own earlier day must not take latest.json backwards.
+    const latestFile = path.join(archiveDir, 'latest.json')
+    const latestDate = fs.existsSync(latestFile) ? JSON.parse(fs.readFileSync(latestFile, 'utf8')).date : null
+    if (latestDate && latestDate > date) {
+      log(`kept ${path.relative(process.cwd(), latestFile)} at ${latestDate}`)
+    } else {
+      writeLatest(archiveDir, payload)
+      log(`wrote ${path.relative(process.cwd(), latestFile)}`)
+    }
     return { code: 0, entry: { outcome, previous_ids: previousIds } }
   }
 

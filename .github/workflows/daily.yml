@@ -48,6 +48,8 @@ jobs:
           # A stale page only fails the last scheduled run. Manual runs are
           # never final.
           FINAL_RUN: ${{ github.event.schedule == '7 11 * * *' && '1' || '' }}
+          # The slot's own IST day, which a late run's clock may be past.
+          SCHEDULE: ${{ github.event.schedule }}
         run: node bin/fetch-today.js
 
       - name: Commit
@@ -58,6 +60,9 @@ jobs:
           if git diff --staged --quiet; then
             echo "no change"
           else
-            git commit -m "chore(archive): $(TZ=Asia/Kolkata date +%F)"
+            # Named after the day written, which a late slot can put before today.
+            day=$(git diff --staged --name-only -- archive | sed -n 's#^archive/\([0-9]\{4\}\)/\([0-9]\{2\}\)/\([0-9]\{2\}\)\.json$#\1-\2-\3#p' | sort | tail -1)
+            [ -n "$day" ] || day=$(node -p "require('./archive/latest.json').date")
+            git commit -m "chore(archive): $day"
             git push
           fi

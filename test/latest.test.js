@@ -6,6 +6,7 @@ const os = require('os')
 const path = require('path')
 const { writeDay, writeLatest } = require('../lib/write')
 const { buildPayload, run } = require('../bin/fetch-today')
+const { slotDayIST } = require('../lib/scrape')
 
 let failures = 0
 // Queued and run in order, since run() is async and output must stay grouped.
@@ -60,7 +61,7 @@ const PAGE = '"page_date":"2026-10-14","page_time":null,"page_created_utc":null,
 const NO_PAGE = '"page_date":null,"page_time":null,"page_created_utc":null,"page_modified_utc":null,"heading_split":null'
 
 /** run() with stdout captured. Errors are returned, not thrown, so the line can be checked. */
-async function capture(dir, today, { env = {}, result = OK_RESULT, fetchPage = SITE, splitTail = () => null } = {}) {
+async function capture(dir, today, { env = {}, result = OK_RESULT, fetchPage = SITE, splitTail = () => null, runUtc = RUN_UTC } = {}) {
   const lines = []
   const asked = []
   let code = null
@@ -75,7 +76,7 @@ async function capture(dir, today, { env = {}, result = OK_RESULT, fetchPage = S
       makeSplitter: () => splitTail,
       corpusVersion: '4.8.7',
       log: () => {},
-      now: () => RUN_UTC,
+      now: () => runUtc,
       out: line => lines.push(line),
     })
   } catch (e) { error = e }
@@ -299,6 +300,55 @@ check('no summary file is created when GITHUB_STEP_SUMMARY is unset', async () =
   const dir = tmpArchiveDir()
   await capture(dir, '2026-10-14')
   assert.deepStrictEqual(listFiles(dir).sort(), [ path.join('2026', '10', '14.json'), 'latest.json' ])
+})
+
+section('\nscheduled slot day')
+
+check('slotDayIST: the slot\'s IST day, however late the run starts', () => {
+  // 11:07 UTC is 16:37 IST; on 17 Nov it started at 19:43 UTC, already 01:13 IST on the 18th.
+  assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-17T19:43:00Z')), '2026-11-17')
+  assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-17T11:07:00Z')), '2026-11-17')
+  assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-18T09:00:00Z')), '2026-11-17')
+  // 23:43 UTC is 05:13 IST on the next day.
+  assert.strictEqual(slotDayIST('43 23 * * *', new Date('2026-11-17T23:50:00Z')), '2026-11-18')
+  assert.strictEqual(slotDayIST('43 23 * * *', new Date('2026-11-18T05:14:00Z')), '2026-11-18')
+})
+check('slotDayIST: null for a manual run or a non-daily line', () => {
+  for (const cron of [ undefined, '', '*/15 * * * *', '7 11 * * 1' ]) {
+    assert.strictEqual(slotDayIST(cron, new Date('2026-11-17T19:43:00Z')), null)
+  }
+})
+check('a late final slot after IST midnight asks for its own day and writes it', async () => {
+  const dir = tmpArchiveDir()
+  const { code, asked } = await capture(dir, '2026-10-15', {
+    env: { FINAL_RUN: '1', SCHEDULE: '7 11 * * *' }, runUtc: '2026-10-14T19:43:00.000Z',
+  })
+  assert.strictEqual(code, 0)
+  assert.deepStrictEqual(asked, [ '2026-10-14' ])
+  assert.deepStrictEqual(listFiles(dir).sort(), [ path.join('2026', '10', '14.json'), 'latest.json' ])
+})
+check('a late final slot still goes red when its own day never appeared', async () => {
+  const dir = tmpArchiveDir()
+  const { code, asked, lines } = await capture(dir, '2026-10-16', {
+    env: { FINAL_RUN: '1', SCHEDULE: '7 11 * * *' }, runUtc: '2026-10-15T19:43:00.000Z',
+  })
+  assert.strictEqual(code, 1)
+  assert.deepStrictEqual(asked, [ '2026-10-15' ])
+  assert.strictEqual(JSON.parse(lines[0]).outcome, 'not_yet')
+})
+check('a manual run asks for today', async () => {
+  const { asked } = await capture(tmpArchiveDir(), '2026-10-15', { env: { SCHEDULE: '' }, runUtc: '2026-10-14T19:43:00.000Z' })
+  assert.deepStrictEqual(asked, [ '2026-10-15' ])
+})
+check('writing an earlier day never takes latest.json backwards', async () => {
+  const dir = tmpArchiveDir()
+  const newer = buildPayload('2026-10-15', { sggs: OK_RESULT }, '4.8.7')
+  writeLatest(dir, newer)
+  const before = read(dir, 'latest.json')
+  const { code } = await capture(dir, '2026-10-14')
+  assert.strictEqual(code, 0)
+  assert.strictEqual(read(dir, 'latest.json'), before)
+  assert.ok(fs.existsSync(path.join(dir, '2026', '10', '14.json')))
 })
 
 ;(async () => {

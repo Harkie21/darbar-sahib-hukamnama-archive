@@ -6,9 +6,11 @@ on:
     # own date (n=111) have a median of 05:09 IST, p75 05:21, p90 07:03.
     # Runs at 05:13, 06:43, 08:13, 10:43 and 16:37 IST, on minutes off the
     # hour to stay clear of GitHub's top-of-hour queue, which has run these
-    # slots 3.8-5.3 h late. A run before posting finds the not-found page and
-    # is a no-op; once a run has written the day, later runs reproduce the
-    # same bytes and the `git diff --staged --quiet` guard skips the commit.
+    # slots 5 to 9 h late. An outside timer also dispatches the workflow every
+    # 15 minutes through the morning, and these slots are the fallback.
+    # A run before posting finds the not-found page and is a no-op; once a
+    # run has written the day, later runs reproduce the same bytes and the
+    # `git diff --staged --quiet` guard skips the commit.
     # These times are provisional and will be revised from the run log.
     - cron: '43 23 * * *'
     - cron: '13 1 * * *'
@@ -18,7 +20,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: daily
+  # The final slot has a group of its own so no newer pending run can replace it.
+  group: daily-${{ github.event.schedule == '7 11 * * *' && 'final' || 'runs' }}
   cancel-in-progress: false
 
 permissions:
@@ -29,6 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The branch tip rather than the queued commit so a run that waited sees earlier runs' commits.
+          ref: ${{ github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -45,9 +51,11 @@ jobs:
         env:
           SHABADOS_DB: node_modules/@shabados/database/build/database.sqlite
           SHABADOS_VERSION: 4.8.7
-          # A stale page only fails the last scheduled run. Manual runs are
-          # never final.
+          # A stale page only fails the last scheduled run. Manual and
+          # dispatched runs are never final.
           FINAL_RUN: ${{ github.event.schedule == '7 11 * * *' && '1' || '' }}
+          # The slot's own IST day since a late run's clock may be past it.
+          SCHEDULE: ${{ github.event.schedule }}
         run: node bin/fetch-today.js
 
       - name: Commit
@@ -58,6 +66,20 @@ jobs:
           if git diff --staged --quiet; then
             echo "no change"
           else
-            git commit -m "chore(archive): $(TZ=Asia/Kolkata date +%F)"
-            git push
+            # Named after the dated file written since a late slot can write an earlier day.
+            day=$(git diff --staged --name-only -- archive | sed -n 's#^archive/\([0-9]\{4\}\)/\([0-9]\{2\}\)/\([0-9]\{2\}\)\.json$#\1-\2-\3#p' | sort | tail -1)
+            [ -n "$day" ] || day=$(node -p "require('./archive/latest.json').date")
+            git commit -m "chore(archive): $day"
+            # The final run can overlap a run from the other group that pushed first.
+            for attempt in 1 2 3; do
+              # In a rebase ours is main so a clashing latest.json keeps main's copy.
+              if git pull --rebase -X ours origin main; then
+                git push && exit 0
+              else
+                git rebase --abort || true
+              fi
+              echo "push attempt $attempt failed"
+              sleep 5
+            done
+            exit 1
           fi

@@ -12,17 +12,22 @@
  *
  * Until the day is posted the site has no page for it, so "no page" is
  * "not yet", not a failure. FINAL_RUN=1 marks the last attempt of the day,
- * where still having no page must go red.
+ * where still having no page must go red. A scheduled run (SCHEDULE set to
+ * its cron line) asks for its slot's IST day, so a slot GitHub starts after
+ * IST midnight still judges the day it was meant for. A site that stays
+ * down through every retry is "unavailable", red only on FINAL_RUN=1 too.
  *
  * Every run prints one JSON line to stdout (and the step summary) saying
- * what happened: written, unchanged, replaced, not_yet or refused.
+ * what happened: written, unchanged, replaced, not_yet, unavailable or refused.
  */
 
 const fs = require('fs')
 const path = require('path')
 const { Resolver, SOURCE_SGGS } = require('../lib/resolve')
-const { todayIST } = require('../lib/scrape')
-const { fetchMorningRaw, parseMorningResponse, headingSplitter, NoHukamnamaError } = require('../lib/hns')
+const { istDate, slotDayIST } = require('../lib/scrape')
+const {
+  fetchMorningRaw, parseMorningResponse, headingSplitter, isTransient, NoHukamnamaError, HttpError,
+} = require('../lib/hns')
 const { pack } = require('../lib/pack')
 const { serialize, datedPath, writeDay, writeLatest } = require('../lib/write')
 
@@ -64,7 +69,7 @@ function logLine({ run_utc, page_date = null, page_time = null, page_created_utc
   const entry = {
     run_utc, page_date, page_time, page_created_utc, page_modified_utc, heading_split, outcome, shabad_ids, confidence,
   }
-  if (outcome === 'refused') entry.reason = reason
+  if (outcome === 'refused' || outcome === 'unavailable') entry.reason = reason
   if (outcome === 'replaced') entry.previous_ids = previous_ids
   return JSON.stringify(entry)
 }
@@ -72,7 +77,6 @@ function logLine({ run_utc, page_date = null, page_time = null, page_created_utc
 /** @returns {Promise<number>} the process exit code */
 async function run({
   fetchPage = fetchMorningRaw,
-  today = todayIST,
   env = process.env,
   archiveDir = ARCHIVE_DIR,
   makeResolver = defaultResolver,
@@ -98,15 +102,24 @@ async function run({
   const splitTail = tail => (splitter ??= makeSplitter(getResolver()))(tail)
 
   const attempt = async () => {
-    const date = today()
+    const startedAt = new Date(fields.run_utc)
+    const date = slotDayIST(env.SCHEDULE, startedAt) ?? istDate(startedAt.getTime())
     let page
     try {
       // Throws DateMismatchError when the dated URL answers with another day.
       page = parseMorningResponse(await fetchPage(date), date, { splitTail })
     } catch (err) {
-      if (!(err instanceof NoHukamnamaError)) throw err
-      log(`not_yet ${err.message}`)
-      return { code: env.FINAL_RUN === '1' ? 1 : 0, entry: { outcome: 'not_yet' } }
+      const code = env.FINAL_RUN === '1' ? 1 : 0
+      if (err instanceof NoHukamnamaError) {
+        log(`not_yet ${err.message}`)
+        return { code, entry: { outcome: 'not_yet' } }
+      }
+      // Still down after every retry so a later run tries again.
+      if (isTransient(err) || (err instanceof HttpError && err.status >= 500)) {
+        log(`unavailable ${err.message}`)
+        return { code, entry: { outcome: 'unavailable', reason: err.message } }
+      }
+      throw err
     }
     fields.page_date = page.date
     fields.page_time = page.time
@@ -124,6 +137,10 @@ async function run({
 
     // SGGS is the whole reading. If it did not resolve, buildPayload throws.
     const payload = buildPayload(date, { sggs: r }, corpusVersion)
+
+    // Read before any write so an unreadable latest.json leaves nothing half written.
+    const latestFile = path.join(archiveDir, 'latest.json')
+    const latestDate = fs.existsSync(latestFile) ? JSON.parse(fs.readFileSync(latestFile, 'utf8')).date : null
 
     const file = datedPath(archiveDir, date)
     let outcome = 'written'
@@ -145,8 +162,13 @@ async function run({
     writeDay(archiveDir, payload)
     log(`wrote ${path.relative(process.cwd(), file)}`)
 
-    writeLatest(archiveDir, payload)
-    log(`wrote ${path.relative(process.cwd(), path.join(archiveDir, 'latest.json'))}`)
+    // A late slot writing its own earlier day must not take latest.json backwards.
+    if (latestDate && latestDate > date) {
+      log(`kept ${path.relative(process.cwd(), latestFile)} at ${latestDate}`)
+    } else {
+      writeLatest(archiveDir, payload)
+      log(`wrote ${path.relative(process.cwd(), latestFile)}`)
+    }
     return { code: 0, entry: { outcome, previous_ids: previousIds } }
   }
 

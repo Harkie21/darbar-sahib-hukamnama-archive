@@ -172,14 +172,18 @@ check('daily: a missing cron fails', () =>
 check('daily: an extra cron fails', () =>
   failsOnly(DAILY, { files: { '.github/workflows/daily.yml':
     DAILY_YML.replace("    - cron: '7 11 * * *'\n", "    - cron: '7 11 * * *'\n    - cron: '7 14 * * *'\n") } }))
-check('daily: FINAL_RUN naming another run fails', () =>
-  failsOnly(DAILY, { files: { '.github/workflows/daily.yml':
-    DAILY_YML.replace("schedule == '7 11 * * *'", "schedule == '13 5 * * *'") } }))
-check('daily: FINAL_RUN naming the last run twice fails', () =>
-  failsOnly(DAILY, { files: { '.github/workflows/daily.yml':
-    DAILY_YML.replace("schedule == '7 11 * * *'", "schedule == '7 11 * * *' || github.event.schedule == '7 11 * * *'") } }))
-check('daily: a missing FINAL_RUN fails', () =>
-  failsOnly(DAILY, { files: { '.github/workflows/daily.yml': DAILY_YML.replace(/^.*FINAL_RUN:.*\n/m, '') } }))
+// daily.yml with one edit made only on the line starting `key:`.
+const onLine = (key, from, to) => DAILY_YML.replace(new RegExp(`^\\s*${key}:.*$`, 'm'), l => l.replace(from, to))
+for (const key of [ 'FINAL_RUN', 'group' ]) {
+  check(`daily: ${key} naming another run fails`, () =>
+    failsOnly(DAILY, { files: { '.github/workflows/daily.yml':
+      onLine(key, "schedule == '7 11 * * *'", "schedule == '13 5 * * *'") } }))
+  check(`daily: ${key} naming the last run twice fails`, () =>
+    failsOnly(DAILY, { files: { '.github/workflows/daily.yml':
+      onLine(key, "schedule == '7 11 * * *'", "schedule == '7 11 * * *' || github.event.schedule == '7 11 * * *'") } }))
+  check(`daily: a missing ${key} fails`, () =>
+    failsOnly(DAILY, { files: { '.github/workflows/daily.yml': DAILY_YML.replace(new RegExp(`^\\s*${key}:.*\\n`, 'm'), '') } }))
+}
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')
 process.exit(failures ? 1 : 0)

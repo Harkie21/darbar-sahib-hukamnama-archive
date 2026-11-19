@@ -95,7 +95,8 @@ async function main() {
 
     let res
     try {
-      res = await fetchMorningRaw(date)
+      // This loop is the retry so each try is a single attempt.
+      res = await fetchMorningRaw(date, { delays: [] })
     } catch (err) {
       consecutiveFailures++
       console.error(`${tag}  failed: ${err.message}`)

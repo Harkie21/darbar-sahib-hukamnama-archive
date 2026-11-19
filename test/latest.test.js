@@ -6,6 +6,7 @@ const os = require('os')
 const path = require('path')
 const { writeDay, writeLatest } = require('../lib/write')
 const { buildPayload, run } = require('../bin/fetch-today')
+const { slotDayIST } = require('../lib/scrape')
 
 let failures = 0
 // Queued and run in order, since run() is async and output must stay grouped.
@@ -41,26 +42,28 @@ const ok = html => ({ status: 200, body: Buffer.from(html) })
 // The site answers today's URL with the 10-14 page on 10-14 and its not-found page otherwise.
 const SITE = async date => ok(date === '2026-10-14' ? MORNING : NOT_FOUND)
 
-const stubRun = (dir, today, env = {}, result = OK_RESULT) => run({
+// A run started at 07:37 IST on `day`, so a run with no SCHEDULE asks for `day`.
+const startedOn = day => `${day}T02:07:00.000Z`
+
+const stubRun = (dir, day, env = {}, result = OK_RESULT) => run({
   fetchPage: SITE,
-  today: () => today,
   env,
   archiveDir: dir,
   makeResolver: () => ({ resolve: () => result }),
   makeSplitter: () => () => null,
   corpusVersion: '4.8.7',
   log: () => {},
+  now: () => startedOn(day),
   out: () => {},
 })
 
-const RUN_UTC = '2026-10-14T02:07:00.000Z'
 const OTHER_RESULT = { ...OK_RESULT, shabad_ids: [ 'XYZ' ], line_ids: [ 'WXYZ' ], margin: 0.4 }
 const PAGE = '"page_date":"2026-10-14","page_time":null,"page_created_utc":null,' +
   '"page_modified_utc":"2026-10-13T23:53:49.000Z","heading_split":false'
 const NO_PAGE = '"page_date":null,"page_time":null,"page_created_utc":null,"page_modified_utc":null,"heading_split":null'
 
 /** run() with stdout captured. Errors are returned, not thrown, so the line can be checked. */
-async function capture(dir, today, { env = {}, result = OK_RESULT, fetchPage = SITE, splitTail = () => null } = {}) {
+async function capture(dir, day, { env = {}, result = OK_RESULT, fetchPage = SITE, splitTail = () => null, runUtc = startedOn(day) } = {}) {
   const lines = []
   const asked = []
   let code = null
@@ -68,14 +71,13 @@ async function capture(dir, today, { env = {}, result = OK_RESULT, fetchPage = S
   try {
     code = await run({
       fetchPage: async date => { asked.push(date); return fetchPage(date) },
-      today: () => today,
       env,
       archiveDir: dir,
       makeResolver: () => ({ resolve: () => result }),
       makeSplitter: () => splitTail,
       corpusVersion: '4.8.7',
       log: () => {},
-      now: () => RUN_UTC,
+      now: () => runUtc,
       out: line => lines.push(line),
     })
   } catch (e) { error = e }
@@ -226,7 +228,7 @@ check('replaced: previous_ids reported and both files overwritten identically', 
 })
 check('not_yet (no page yet): exact line, exit 0, and exit 1 on FINAL_RUN=1', async () => {
   const dir = tmpArchiveDir()
-  const expected = `{"run_utc":"2026-10-14T02:07:00.000Z",${NO_PAGE},"outcome":"not_yet","shabad_ids":null,"confidence":null}`
+  const expected = `{"run_utc":"2026-10-15T02:07:00.000Z",${NO_PAGE},"outcome":"not_yet","shabad_ids":null,"confidence":null}`
   const a = await capture(dir, '2026-10-15')
   assert.strictEqual(a.code, 0)
   assert.deepStrictEqual(a.lines, [ expected ])
@@ -247,7 +249,7 @@ check('refused (yesterday\'s page at today\'s URL): DateMismatchError, writes no
   const { error, lines } = await capture(dir, '2026-10-15', { fetchPage: async () => ok(MORNING), env: { FINAL_RUN: '1' } })
   assert.strictEqual(error.name, 'DateMismatchError')
   assert.deepStrictEqual(lines, [
-    `{"run_utc":"2026-10-14T02:07:00.000Z",${NO_PAGE},"outcome":"refused","shabad_ids":null,"confidence":null,` +
+    `{"run_utc":"2026-10-15T02:07:00.000Z",${NO_PAGE},"outcome":"refused","shabad_ids":null,"confidence":null,` +
     '"reason":"date_mismatch: requested 2026-10-15, got 2026-10-14"}',
   ])
   assert.deepStrictEqual(listFiles(dir), [])
@@ -286,6 +288,39 @@ check('refused on HTTP 403: exact reason, writes nothing', async () => {
   assert.strictEqual(JSON.parse(lines[0]).reason, 'http_403: https://hukamnamasahib.com/hukamnama/2026-10-14-morning')
   assert.deepStrictEqual(listFiles(dir), [])
 })
+check('unavailable (5xx after the retries): exact line, exit 0, and exit 1 on FINAL_RUN=1', async () => {
+  const dir = tmpArchiveDir()
+  const fetchPage = async () => ({ status: 503, body: Buffer.from('') })
+  const expected = `{"run_utc":"2026-10-14T02:07:00.000Z",${NO_PAGE},"outcome":"unavailable","shabad_ids":null,"confidence":null,` +
+    '"reason":"http_503: https://hukamnamasahib.com/hukamnama/2026-10-14-morning"}'
+  const a = await capture(dir, '2026-10-14', { fetchPage })
+  assert.strictEqual(a.code, 0)
+  assert.deepStrictEqual(a.lines, [ expected ])
+  const b = await capture(dir, '2026-10-14', { fetchPage, env: { FINAL_RUN: '1' } })
+  assert.strictEqual(b.error, null)
+  assert.strictEqual(b.code, 1)
+  assert.deepStrictEqual(b.lines, [ expected ])
+  assert.deepStrictEqual(listFiles(dir), [])
+})
+check('unavailable on a timeout or a dropped connection after the retries', async () => {
+  const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+  for (const err of [ timeout, new TypeError('fetch failed') ]) {
+    const dir = tmpArchiveDir()
+    const { code, error, lines } = await capture(dir, '2026-10-14', { fetchPage: async () => { throw err } })
+    assert.strictEqual(error, null)
+    assert.strictEqual(code, 0)
+    assert.deepStrictEqual([ JSON.parse(lines[0]).outcome, JSON.parse(lines[0]).reason ], [ 'unavailable', err.message ])
+    assert.deepStrictEqual(listFiles(dir), [])
+  }
+})
+check('a redirect or any other thrown error is still refused', async () => {
+  const redirect = await capture(tmpArchiveDir(), '2026-10-14', { fetchPage: async () => ({ status: 301, body: Buffer.from('') }) })
+  assert.strictEqual(redirect.error.name, 'HttpError')
+  assert.strictEqual(JSON.parse(redirect.lines[0]).outcome, 'refused')
+  const boom = await capture(tmpArchiveDir(), '2026-10-14', { fetchPage: async () => { throw new Error('boom') } })
+  assert.strictEqual(boom.error.message, 'boom')
+  assert.strictEqual(JSON.parse(boom.lines[0]).outcome, 'refused')
+})
 check('the same line is appended to GITHUB_STEP_SUMMARY when set', async () => {
   const dir = tmpArchiveDir()
   const summary = path.join(tmpArchiveDir(), 'summary.md')
@@ -299,6 +334,68 @@ check('no summary file is created when GITHUB_STEP_SUMMARY is unset', async () =
   const dir = tmpArchiveDir()
   await capture(dir, '2026-10-14')
   assert.deepStrictEqual(listFiles(dir).sort(), [ path.join('2026', '10', '14.json'), 'latest.json' ])
+})
+
+section('\nscheduled slot day')
+
+check('slotDayIST: the slot\'s IST day, however late the run starts', () => {
+  // The 16:37 IST slot of 17 Nov started at 19:43 UTC which is already 18 Nov in IST.
+  assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-17T19:43:00Z')), '2026-11-17')
+  assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-17T11:07:00Z')), '2026-11-17')
+  assert.strictEqual(slotDayIST('7 11 * * *', new Date('2026-11-18T09:00:00Z')), '2026-11-17')
+  // 23:43 UTC is 05:13 IST on the next day.
+  assert.strictEqual(slotDayIST('43 23 * * *', new Date('2026-11-17T23:50:00Z')), '2026-11-18')
+  assert.strictEqual(slotDayIST('43 23 * * *', new Date('2026-11-18T05:14:00Z')), '2026-11-18')
+})
+check('slotDayIST: null for a manual run or a non-daily line', () => {
+  for (const cron of [ undefined, '', '*/15 * * * *', '7 11 * * 1' ]) {
+    assert.strictEqual(slotDayIST(cron, new Date('2026-11-17T19:43:00Z')), null)
+  }
+})
+check('a late final slot after IST midnight asks for its own day and writes it', async () => {
+  const dir = tmpArchiveDir()
+  const { code, asked } = await capture(dir, '2026-10-15', {
+    env: { FINAL_RUN: '1', SCHEDULE: '7 11 * * *' }, runUtc: '2026-10-14T19:43:00.000Z',
+  })
+  assert.strictEqual(code, 0)
+  assert.deepStrictEqual(asked, [ '2026-10-14' ])
+  assert.deepStrictEqual(listFiles(dir).sort(), [ path.join('2026', '10', '14.json'), 'latest.json' ])
+})
+check('a late final slot still goes red when its own day never appeared', async () => {
+  const dir = tmpArchiveDir()
+  const { code, asked, lines } = await capture(dir, '2026-10-16', {
+    env: { FINAL_RUN: '1', SCHEDULE: '7 11 * * *' }, runUtc: '2026-10-15T19:43:00.000Z',
+  })
+  assert.strictEqual(code, 1)
+  assert.deepStrictEqual(asked, [ '2026-10-15' ])
+  assert.strictEqual(JSON.parse(lines[0]).outcome, 'not_yet')
+})
+check('a manual run asks for the IST day of its own start', async () => {
+  const { asked } = await capture(tmpArchiveDir(), '2026-10-15', { env: { SCHEDULE: '' }, runUtc: '2026-10-14T19:43:00.000Z' })
+  assert.deepStrictEqual(asked, [ '2026-10-15' ])
+  // 18:29 UTC is 23:59 IST and 18:30 UTC is IST midnight.
+  for (const [ runUtc, day ] of [ [ '2026-10-14T18:29:59.000Z', '2026-10-14' ], [ '2026-10-14T18:30:00.000Z', '2026-10-15' ] ]) {
+    assert.deepStrictEqual((await capture(tmpArchiveDir(), day, { runUtc })).asked, [ day ])
+  }
+})
+check('an unreadable latest.json is refused before the dated file is written', async () => {
+  const dir = tmpArchiveDir()
+  fs.writeFileSync(path.join(dir, 'latest.json'), '{"date":')
+  const { error, lines } = await capture(dir, '2026-10-14')
+  assert.ok(error instanceof SyntaxError)
+  assert.strictEqual(JSON.parse(lines[0]).outcome, 'refused')
+  assert.deepStrictEqual(listFiles(dir), [ 'latest.json' ])
+  assert.strictEqual(read(dir, 'latest.json'), '{"date":')
+})
+check('writing an earlier day never takes latest.json backwards', async () => {
+  const dir = tmpArchiveDir()
+  const newer = buildPayload('2026-10-15', { sggs: OK_RESULT }, '4.8.7')
+  writeLatest(dir, newer)
+  const before = read(dir, 'latest.json')
+  const { code } = await capture(dir, '2026-10-14')
+  assert.strictEqual(code, 0)
+  assert.strictEqual(read(dir, 'latest.json'), before)
+  assert.ok(fs.existsSync(path.join(dir, '2026', '10', '14.json')))
 })
 
 ;(async () => {

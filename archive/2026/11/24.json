@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-24",
+  "source": "darbar_sahib",
+  "shabad_ids": [
+    "Q27",
+    "JSL"
+  ],
+  "sggs": {
+    "shabad_ids": [
+      "Q27",
+      "JSL"
+    ],
+    "line_ids": [
+      "QJTF",
+      "NTAF",
+      "E1FA",
+      "Q12M",
+      "S202",
+      "0720",
+      "HHVD",
+      "Z9MS"
+    ],
+    "confidence": "high",
+    "score": 0.991,
+    "margin": 0.497,
+    "ang": 704,
+    "ang_delta": 0,
+    "counters": [
+      1,
+      1
+    ]
+  },
+  "dsg": null,
+  "corpus": {
+    "name": "@shabados/database",
+    "version": "4.8.7"
+  }
+}
